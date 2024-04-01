@@ -1,20 +1,10 @@
 from fastapi import FastAPI, HTTPException, Form
-import httpx
+import requests
 
 app = FastAPI()
 
 MIDJOURNEY_API_URL = "https://api.userapi.ai/midjourney/v2"
 MIDJOURNEY_API_KEY = "81ffded2-61b6-4f25-a75f-49a11ff2478b"
-
-async def post_request(url, data, headers):
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=data, headers=headers)
-    return response.json()
-
-async def get_request(url, headers):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
-    return response.json()
 
 @app.post("/imagine")
 async def imagine(
@@ -25,7 +15,10 @@ async def imagine(
     is_disable_prefilter: bool = Form(False),
 ):
     url = f"{MIDJOURNEY_API_URL}/imagine"
-    headers = {"api-key": MIDJOURNEY_API_KEY}
+    headers = {
+        "api-key": MIDJOURNEY_API_KEY,
+        "Content-Type": "application/json"
+    }
     data = {
         "prompt": prompt,
         "webhook_url": webhook_url,
@@ -33,20 +26,13 @@ async def imagine(
         "account_hash": account_hash,
         "is_disable_prefilter": is_disable_prefilter,
     }
-    response_data = await post_request(url, data, headers)
+    response = requests.post(url, headers=headers, json=data)
+    response_data = response.json()
     task_hash = response_data.get("hash")
-    return await get_task_status(task_hash)
-
-async def get_task_status(task_hash: str):
     status_url = f"{MIDJOURNEY_API_URL}/status?hash={task_hash}"
-    headers = {
-        "api-key": MIDJOURNEY_API_KEY,
-        "Content-Type": "application/json"
-    }
     while True:
-        status_response_data = await get_request(status_url, headers)
+        status_response = requests.get(status_url, headers=headers)
+        status_response_data = status_response.json()
         if status_response_data.get("status") == "done":
             urls = status_response_data.get("result", {}).get("url")
             return {"urls": urls}
-
-
